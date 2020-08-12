@@ -644,3 +644,9 @@ message SemgrexResponse {
   repeated GraphResult result = 1;
 }
 
+message DependencyEnhancerRequest {
+  required Document          document           = 1;
+  optional Language          language           = 2;
+  // The expected value of this is a regex which matches relative pronouns
+  optional string            relativePronouns   = 3;
+}
