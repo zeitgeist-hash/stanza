@@ -25,6 +25,38 @@ def send_semgrex_request(request):
     return send_request(request, SemgrexResponse,
                         "edu.stanford.nlp.semgraph.semgrex.ProcessSemgrexRequest")
 
+def add_token(token_list, word, token):
+    """
+    Add a token to a proto request.
+
+    CoreNLP tokens have components of both word and token from stanza.
+    """
+    query_token = token_list.add()
+    query_token.word = word.text
+    query_token.value = word.text
+    if word.lemma is not None:
+        query_token.lemma = word.lemma
+    if word.xpos is not None:
+        query_token.pos = word.xpos
+    if word.upos is not None:
+        query_token.coarseTag = word.upos
+    if token.ner is not None:
+        query_token.ner = token.ner
+
+def add_word_to_graph(graph, word, sent_idx, word_idx):
+    """
+    Add a node and possibly an edge for a word in a basic dependency graph.
+    """
+    node = graph.node.add()
+    node.sentenceIndex = sent_idx+1
+    node.index = word_idx+1
+
+    if word.head != 0:
+        edge = graph.edge.add()
+        edge.source = word.head
+        edge.target = word_idx+1
+        edge.dep = word.deprel
+
 def process_doc(doc, *semgrex_patterns):
     """
     Returns the result of processing the given semgrex expression on the stanza doc.
@@ -40,28 +72,8 @@ def process_doc(doc, *semgrex_patterns):
         word_idx = 0
         for token in sentence.tokens:
             for word in token.words:
-                query_token = query.token.add()
-                query_token.word = word.text
-                query_token.value = word.text
-                if word.lemma is not None:
-                    query_token.lemma = word.lemma
-                if word.xpos is not None:
-                    query_token.pos = word.xpos
-                if word.upos is not None:
-                    query_token.coarseTag = word.upos
-                if token.ner is not None:
-                    query_token.ner = token.ner
-
-                node = query.graph.node.add()
-                node.sentenceIndex = sent_idx+1
-                node.index = word_idx+1
-
-                if word.head != 0:
-                    edge = query.graph.edge.add()
-                    edge.source = word.head
-                    edge.target = word_idx+1
-                    edge.dep = word.deprel
-
+                add_token(query.token, word, token)
+                add_word_to_graph(query.graph, word, sent_idx, word_idx)
                 word_idx = word_idx + 1
 
     return send_semgrex_request(request)
