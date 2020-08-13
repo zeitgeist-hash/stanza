@@ -10,7 +10,7 @@ from stanza.server.client import resolve_classpath
 
 def send_request(request, response_type, java_main):
     """
-    Use subprocess to run the Semgrex processor on the given request
+    Use subprocess to run a Java protobuf processor on the given request
 
     Returns the protobuf response
     """
