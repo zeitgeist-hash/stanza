@@ -17,36 +17,37 @@ import glob
 import os
 import sys
 
-from stanza.utils.datasets.process_thai_tokenization import write_section
+from pythainlp import sent_tokenize
+
+from stanza.utils.datasets.process_thai_tokenization import write_section, convert_processed_lines, reprocess_lines
 
 def read_data(input_dir, section):
     input_dir = os.path.join(input_dir, section)
     filenames = glob.glob(os.path.join(input_dir, "*.txt"))
     documents = []
     for filename in filenames:
-        document = []
         lines = open(filename).readlines()
+        processed_lines = []
         sentence = []
         for line in lines:
             line = line.strip()
             if not line:
                 if sentence:
-                    #sentence[-1] = (sentence[-1][0], True)
-                    document.append(sentence)
+                    processed_lines.append(sentence)
                     sentence = []
             else:
                 pieces = line.split("\t")
                 if pieces[0] == '_':
-                    sentence[-1] = (sentence[-1][0], True)
+                    sentence.append(' ')
                 else:
-                    sentence.append((pieces[0], False))
-
+                    sentence.append(pieces[0])
         if sentence:
-            #sentence[-1] = (sentence[-1][0], True)
-            document.append(sentence)
-            sentence = []
-        # TODO: is there any way to divide up a single document into paragraphs?
-        documents.append([document])
+            processed_lines.append(sentence)
+
+        processed_lines = reprocess_lines(processed_lines)
+        paragraphs = convert_processed_lines(processed_lines)
+
+        documents.extend(paragraphs)
     return documents
 
 def main():
