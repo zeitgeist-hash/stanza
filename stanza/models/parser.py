@@ -26,7 +26,7 @@ from stanza.models.depparse.trainer import Trainer
 from stanza.models.depparse import scorer
 from stanza.models.common import utils
 from stanza.models.common.pretrain import Pretrain
-from stanza.models.common.data import augment_punct
+from stanza.models.common.data import AugmentedDataLoader
 from stanza.models.common.doc import *
 from stanza.utils.conll import CoNLL
 from stanza.models import _training_logging
@@ -139,17 +139,16 @@ def train(args):
     # load data
     logger.info("Loading data with batch size {}...".format(args['batch_size']))
     train_data = CoNLL.conll2dict(input_file=args['train_file'])
-    # possibly augment the training data with some amount of fake data
-    # based on the options chosen
-    logger.info("Original data size: {}".format(len(train_data)))
-    train_data.extend(augment_punct(train_data, args['augment_nopunct'],
-                                    data.should_augment_nopunct_predicate,
-                                    data.can_augment_nopunct_predicate,
-                                    keep_original_sentences=False))
-    logger.info("Augmented data size: {}".format(len(train_data)))
     train_doc = Document(train_data)
     train_batch = DataLoader(train_doc, args['batch_size'], args, pretrain, evaluation=False)
+    # TODO: this may need to be moved into the AugmentedDataLoader if
+    # the augmenting can change the vocab
     vocab = train_batch.vocab
+    # possibly augment the training data with some amount of fake data
+    # based on the options chosen
+    train_batch = AugmentedDataLoader(train_batch, args['augment_nopunct'],
+                                      data.should_augment_nopunct_predicate,
+                                      data.can_augment_nopunct_predicate)
     dev_doc = Document(CoNLL.conll2dict(input_file=args['eval_file']))
     dev_batch = DataLoader(dev_doc, args['batch_size'], args, pretrain, vocab=vocab, evaluation=True, sort_during_eval=True)
 

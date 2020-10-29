@@ -24,7 +24,7 @@ from stanza.models.pos.trainer import Trainer
 from stanza.models.pos import scorer
 from stanza.models.common import utils
 from stanza.models.common.pretrain import Pretrain
-from stanza.models.common.data import augment_punct
+from stanza.models.common.data import AugmentedDataLoader
 from stanza.models.common.doc import *
 from stanza.utils.conll import CoNLL
 from stanza.models import _training_logging
@@ -140,16 +140,13 @@ def train(args):
     # train_data is now a list of sentences, where each sentence is a
     # list of words, in which each word is a dict of conll attributes
     train_data = CoNLL.conll2dict(input_file=args['train_file'])
-    # possibly augment the training data with some amount of fake data
-    # based on the options chosen
-    logger.info("Original data size: {}".format(len(train_data)))
-    train_data.extend(augment_punct(train_data, args['augment_nopunct'],
-                                    data.augment_nopunct_predicate,
-                                    data.augment_nopunct_predicate,
-                                    keep_original_sentences=False))
-    logger.info("Augmented data size: {}".format(len(train_data)))
     train_doc = Document(train_data)
     train_batch = DataLoader(train_doc, args['batch_size'], args, pretrain, evaluation=False)
+    # possibly augment the training data with some amount of fake data
+    # based on the options chosen
+    train_batch = AugmentedDataLoader(train_batch, args['augment_nopunct'],
+                                      data.augment_nopunct_predicate,
+                                      data.augment_nopunct_predicate)
     vocab = train_batch.vocab
     dev_doc = Document(CoNLL.conll2dict(input_file=args['eval_file']))
     dev_batch = DataLoader(dev_doc, args['batch_size'], args, pretrain, vocab=vocab, evaluation=True, sort_during_eval=True)

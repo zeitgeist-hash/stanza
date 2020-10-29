@@ -129,3 +129,26 @@ def augment_punct(train_data, augment_ratio, should_augment_predicate, can_augme
                 new_data.append(new_sentence)
 
     return new_data
+
+class AugmentedDataLoader:
+    def __init__(self, data_loader, augment_ratio, should_augment_predicate, can_augment_predicate):
+        self.data_loader = data_loader
+        self.augment_ratio = augment_ratio
+        self.should_augment_predicate = should_augment_predicate
+        self.can_augment_predicate = can_augment_predicate
+
+    def __len__(self):
+        return self.data_loader.__len__()
+
+    def __iter__(self):
+        for i in range(self.data_loader.__len__()):
+            chunk = self.data_loader.__getitem__(i)
+            chunk = augment_punct(chunk,
+                                  augment_ratio=self.augment_ratio,
+                                  should_augment_predicate=self.should_augment_predicate,
+                                  can_augment_predicate=self.can_augment_predicate,
+                                  keep_original_sentences=True)
+            yield chunk
+
+    def reshuffle(self):
+        return self.data_loader.reshuffle()
