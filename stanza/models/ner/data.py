@@ -12,7 +12,7 @@ from stanza.models.ner.utils import is_bio_scheme, to_bio2, bio2_to_bioes
 logger = logging.getLogger('stanza')
 
 class DataLoader:
-    def __init__(self, doc, batch_size, args, pretrain=None, vocab=None, evaluation=False, preprocess_tags=True):
+    def __init__(self, doc, batch_size, args, pretrain=None, vocab=None, evaluation=False, preprocess_tags=True, logit_targets=None):
         self.batch_size = batch_size
         self.args = args
         self.eval = evaluation
@@ -36,7 +36,7 @@ class DataLoader:
             data = random.sample(data, keep)
             logger.debug("Subsample training set with rate {:g}".format(args['sample_train']))
 
-        data = self.preprocess(data, self.vocab, args)
+        data = self.preprocess(data, self.vocab, logit_targets, args)
         # shuffle for training
         if self.shuffled:
             random.shuffle(data)
@@ -66,7 +66,7 @@ class DataLoader:
                             'tag': tagvocab})
         return vocab
 
-    def preprocess(self, data, vocab, args):
+    def preprocess(self, data, vocab, logit_targets, args):
         processed = []
         if args.get('lowercase', True): # handle word case
             case = lambda x: x.lower()
@@ -81,6 +81,15 @@ class DataLoader:
             processed_sent += [[vocab['char'].map([char_case(x) for x in w[0]]) for w in sent]]
             processed_sent += [vocab['tag'].map([w[1] for w in sent])]
             processed.append(processed_sent)
+
+        if logit_targets is None:
+            for sent in processed:
+                sent.append(None)
+        else:
+            assert len(processed) == len(logit_targets)
+            for sent, logit in zip(processed, logit_targets):
+                sent.append(logit)
+
         return processed
 
     def __len__(self):
@@ -95,7 +104,8 @@ class DataLoader:
         batch = self.data[key]
         batch_size = len(batch)
         batch = list(zip(*batch))
-        assert len(batch) == 3 # words: List[List[int]], chars: List[List[List[int]]], tags: List[List[int]]
+        # TODO probably list-list-list-double actually?
+        assert len(batch) == 4 # words: List[List[int]], chars: List[List[List[int]]], tags: List[List[int]], logits: None or List[List[double]]
 
         # sort sentences by lens for easy RNN operations
         sentlens = [len(x) for x in batch[0]]
@@ -126,7 +136,9 @@ class DataLoader:
         charoffsets = [charoffsets_forward, charoffsets_backward] # idx for forward and backward lm to get word representation
         tags = get_long_tensor(batch[2], batch_size)
 
-        return words, words_mask, wordchars, wordchars_mask, chars, tags, orig_idx, word_orig_idx, char_orig_idx, sentlens, wordlens, charlens, charoffsets
+        logit_targets = batch[3]
+
+        return words, words_mask, wordchars, wordchars_mask, chars, tags, orig_idx, word_orig_idx, char_orig_idx, sentlens, wordlens, charlens, charoffsets, logit_targets
 
     def __iter__(self):
         for i in range(self.__len__()):

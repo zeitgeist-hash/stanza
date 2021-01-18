@@ -88,6 +88,8 @@ def parse_args(args=None):
     parser.add_argument('--cuda', type=bool, default=torch.cuda.is_available())
     parser.add_argument('--cpu', action='store_true', help='Ignore CUDA.')
 
+    parser.add_argument('--distill_filenames', default=None, help='Use these models as the basis for distilling an NER model - use the logits produced by these models as part of the loss function')
+
     args = parser.parse_args(args=args)
     return args
 
@@ -105,6 +107,35 @@ def main(args=None):
         train(args)
     else:
         evaluate(args)
+
+def data_with_logit_targets(train_doc, batch_size, distill_filenames, args, pretrain, vocab):
+    distill_filenames = distill_filenames.split(',')
+    all_logits = []
+    output_size = None
+    for filename in distill_filenames:
+        logger.info('Getting logits from ' + filename)
+        distill_args, distill_trainer, distill_vocab = load_model(args, filename)
+        train_batch = DataLoader(train_doc, 1, distill_args, pretrain, vocab=distill_vocab, evaluation=True)
+        logits = [distill_trainer.logits(batch) for batch in train_batch]
+        all_logits.append(logits)
+        if output_size is None:
+            output_size = logits[0].shape[2]
+        else:
+            assert logits[0].shape[2] == output_size, f"{filename} has different size output layer compared to {distill_filenames[0]}"
+
+    print(f"Output size: {output_size}")
+
+    if len(all_logits) == 1:
+        averaged_logits = all_logits[0]
+    else:
+        averaged_logits = []
+        for logits in zip(*all_logits):
+            logits = torch.cat(logits)
+            logits = torch.mean(logits, dim=0)
+            averaged_logits.append(logits)
+
+    train_batch = DataLoader(train_doc, batch_size, args, pretrain, vocab=vocab, logit_targets=averaged_logits, evaluation=False)
+    return train_batch
 
 def train(args):
     utils.ensure_dir(args['save_dir'])
@@ -143,7 +174,12 @@ def train(args):
     # load data
     logger.info("Loading data with batch size {}...".format(args['batch_size']))
     train_doc = Document(json.load(open(args['train_file'])))
-    train_batch = DataLoader(train_doc, args['batch_size'], args, pretrain, vocab=vocab, evaluation=False)
+    if args['distill_filenames']:
+        logger.info("Attaching logit targets to the data")
+        train_batch = data_with_logit_targets(train_doc, args['batch_size'], args['distill_filenames'], args, pretrain, vocab=vocab)
+    else:
+        train_batch = DataLoader(train_doc, args['batch_size'], args, pretrain, vocab=vocab, evaluation=False)
+
     vocab = train_batch.vocab
     dev_doc = Document(json.load(open(args['eval_file'])))
     dev_batch = DataLoader(dev_doc, args['batch_size'], args, pretrain, vocab=vocab, evaluation=True)
