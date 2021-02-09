@@ -209,7 +209,9 @@ class DataLoader:
                     raw_units = raw_units[:self.args['max_seqlen']]
                     break
 
-            if drop_sents:
+            if drop_sents and len(cumlens) > 0:
+                # len(cumlens) == 0 can happen if the first sentence
+                # is longer than one entire batch
                 cutoff = random.choice(cumlens)
                 units = units[:cutoff]
                 labels = labels[:cutoff]
