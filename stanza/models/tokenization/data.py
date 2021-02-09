@@ -188,8 +188,8 @@ class DataLoader:
             pid, sid = id_pair
             units, labels, feats, raw_units = copy([x[offset:] for x in self.sentences[pid][sid]])
 
-            sent_drop_prob = 0 if self.eval else self.args.get('sent_drop_prob', 0)
-            if sent_drop_prob > 0:
+            drop_sents = False if self.eval or (self.args.get('sent_drop_prob', 0) == 0) else (random.random() < self.args.get('sent_drop_prob', 0))
+            if drop_sents:
                 cumlens = []
 
             assert self.eval or len(units) <= self.args['max_seqlen'], 'The maximum sequence length {} is less than that of the longest sentence length ({}) in the data, consider increasing it! {}'.format(self.args['max_seqlen'], len(units), ' '.join(["{}/{}".format(*x) for x in zip(self.sentences[pid][sid])]))
@@ -199,7 +199,7 @@ class DataLoader:
                 feats.extend(self.sentences[pid][sid1][2])
                 raw_units.extend(self.sentences[pid][sid1][3])
 
-                if sent_drop_prob > 0:
+                if drop_sents:
                     cumlens.append(len(units))
 
                 if len(units) >= self.args['max_seqlen']:
@@ -209,7 +209,7 @@ class DataLoader:
                     raw_units = raw_units[:self.args['max_seqlen']]
                     break
 
-            if sent_drop_prob > 0 and random.random() < sent_drop_prob:
+            if drop_sents:
                 cutoff = random.choice(cumlens)
                 units = units[:cutoff]
                 labels = labels[:cutoff]
